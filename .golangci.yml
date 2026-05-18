@@ -1,0 +1,18 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+    - govet
+
+issues:
+  # Keep CI noise low; revisit if you want stricter enforcement.
+  max-issues-per-linter: 0
+  max-same-issues: 0

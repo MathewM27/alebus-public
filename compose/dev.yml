@@ -1,0 +1,273 @@
+# Alebus Canonical Dev Stack
+# Single compose file for complete local development environment.
+#
+# Usage:
+#   make dev-up              # Start entire stack (recommended)
+#   make dev-down            # Stop stack
+#   make dev-logs            # Tail logs
+#
+# Manual usage:
+#   docker compose -f compose/dev.yml --profile journey-worker up -d --build
+#   docker compose -f compose/dev.yml --profile journey-worker down
+#
+# Stack includes:
+#   - postgres (5432)
+#   - redis standalone (6382 → 6379)
+#   - emqx (1883, 18083)
+#   - ingestor (9100)
+#   - journey-worker (profile: journey-worker)
+#   - simulator (9090, dev API, default for simulation_preview)
+#   - api (8080, prod-like, optional)
+
+services:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Postgres Database
+  # ───────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: alebus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alebus}
+      POSTGRES_USER: ${POSTGRES_USER:-alebus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alebus}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alebus -d alebus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alebus-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Redis (Single Node for Development)
+  # Host port 6382 to avoid conflict with potential sentinel master on 6379
+  # ───────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: alebus-redis-emqx
+    restart: unless-stopped
+    ports:
+      - "6382:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - alebus-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # EMQX MQTT Broker
+  # ───────────────────────────────────────────────────────────────────────────
+  emqx:
+    image: emqx/emqx:5.5.0
+    container_name: alebus-emqx
+    restart: unless-stopped
+    ports:
+      - "1883:1883"     # MQTT TCP
+      - "8083:8083"     # MQTT WebSocket
+      - "8084:8084"     # MQTT WebSocket/TLS
+      - "8883:8883"     # MQTT TLS
+      - "18083:18083"   # Dashboard
+    environment:
+      EMQX_ALLOW_ANONYMOUS: "${EMQX_ALLOW_ANONYMOUS:-true}"
+      EMQX_MQTT__SHARED_SUBSCRIPTION: "true"
+      EMQX_MQTT__SHARED_SUBSCRIPTION_STRATEGY: "round_robin"
+    volumes:
+      - emqx-data:/opt/emqx/data
+      - emqx-log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD", "emqx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - alebus-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # EMQX Ingestor (MQTT → Redis Bridge)
+  # ───────────────────────────────────────────────────────────────────────────
+  ingestor:
+    build:
+      context: ..
+      dockerfile: cmd/emqx_ingestor/Dockerfile
+    container_name: alebus-ingestor
+    restart: unless-stopped
+    depends_on:
+      emqx:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9100:9100"
+    environment:
+      # MQTT configuration
+      EMQX_SERVER_URLS: "mqtt://emqx:1883"
+      EMQX_CLIENT_ID: "alebus-ingestor-1"
+      EMQX_USERNAME: "${EMQX_INGESTOR_USERNAME:-ingestor}"
+      EMQX_PASSWORD: "${EMQX_INGESTOR_PASSWORD:-ingestorpass}"
+      EMQX_TOPIC_FILTER: "bus/+/gps"
+      EMQX_SHARED_GROUP: "alebus-ingestor"
+      EMQX_QOS: "1"
+      EMQX_KEEPALIVE_SECONDS: "30"
+      EMQX_CLEAN_START_ON_INITIAL: "true"
+      EMQX_SESSION_EXPIRY_SECONDS: "0"
+      # GPS Enrichment
+      ENABLE_GPS_ENRICHMENT: "true"
+      GPS_ROLLOUT_PERCENTAGE: "100"
+      GPS_LOG_ENABLED: "true"
+      GPS_DEBUG_ENABLED: "false"
+      # Database
+      DATABASE_URL: "postgres://alebus:alebus@postgres:5432/alebus?sslmode=disable"
+      # Ingestor configuration
+      INGESTOR_WORKERS: "10"
+      INGESTOR_QUEUE_SIZE: "1000"
+      INGESTOR_DROP_POLICY: "coalesce_latest"
+      INGESTOR_HTTP_ADDR: ":9100"
+      # Retry configuration
+      NACK_BACKOFF_MIN: "100ms"
+      NACK_BACKOFF_MAX: "5s"
+      NACK_MAX_RETRIES: "3"
+      # Heartbeat configuration
+      HEARTBEAT_KEY: "ingestor:heartbeat"
+      HEARTBEAT_TTL: "30s"
+      # Redis configuration
+      REDIS_ADDR: "redis:6379"
+      REDIS_ENABLED: "true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9100/healthz"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    networks:
+      - alebus-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Journey Worker (Journey Tracking + PubSub Publisher)
+  # Enabled by default via --profile journey-worker
+  # ───────────────────────────────────────────────────────────────────────────
+  journey-worker:
+    profiles: ["journey-worker"]
+    container_name: alebus-journey-worker
+    build:
+      context: ..
+      dockerfile: cmd/journey_worker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgres://alebus:alebus@postgres:5432/alebus?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      REDIS_ENABLED: "true"
+    networks:
+      - alebus-net
+    command: ["-interval=2s", "-batch=500"]
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Simulator (Dev API, Port 9090)
+  # Dev endpoints enabled, MQTT publisher for testing, auth off
+  # This is the default target for simulation_preview proxy
+  # ───────────────────────────────────────────────────────────────────────────
+  simulator:
+    build:
+      context: ..
+      dockerfile: cmd/simulator/Dockerfile
+    container_name: alebus-simulator
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      SIMULATOR_PORT: "9090"
+      DATABASE_URL: "postgres://alebus:alebus@postgres:5432/alebus?sslmode=disable"
+      REDIS_ENABLED: "true"
+      REDIS_ADDR: "redis:6379"
+      MQTT_BROKER_URL: "mqtt://emqx:1883"
+      API_MQTT_CLIENT_ID: "alebus-simulator"
+      DEV_ENDPOINT_SECRET: "dev"
+      DEV_ENDPOINT_ALLOWED_IPS: "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      # Auth configuration - explicitly set to 'off' for simulator to work without auth
+      # This overrides any .env file settings
+      API_AUTH_MODE: "off"
+      API_BEARER_TOKEN: "${API_BEARER_TOKEN:-}"
+      API_BEARER_TOKEN_OPS: "${API_BEARER_TOKEN_OPS:-}"
+      API_BEARER_TOKEN_ADMIN: "${API_BEARER_TOKEN_ADMIN:-}"
+      API_API_KEY: "${API_API_KEY:-}"
+      API_API_KEY_OPS: "${API_API_KEY_OPS:-}"
+      API_API_KEY_ADMIN: "${API_API_KEY_ADMIN:-}"
+      # WebSocket allowed origins
+      WS_ALLOWED_ORIGINS: "http://127.0.0.1:9090,http://localhost:9090,http://127.0.0.1:5500,http://localhost:5500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
+    networks:
+      - alebus-net
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # API (Prod-like, Port 8080)
+  # Dev endpoints removed, auth configurable via API_AUTH_MODE
+  # Optional for testing production-like behavior
+  # ───────────────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ..
+      dockerfile: cmd/api/Dockerfile
+    container_name: alebus-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      API_HTTP_PORT: "8080"
+      DATABASE_URL: "postgres://alebus:alebus@postgres:5432/alebus?sslmode=disable"
+      REDIS_ENABLED: "true"
+      REDIS_ADDR: "redis:6379"
+      # Auth configuration (override via .env file or environment variables)
+      API_AUTH_MODE: "${API_AUTH_MODE:-off}"
+      API_BEARER_TOKEN: "${API_BEARER_TOKEN:-}"
+      API_BEARER_TOKEN_OPS: "${API_BEARER_TOKEN_OPS:-}"
+      API_BEARER_TOKEN_ADMIN: "${API_BEARER_TOKEN_ADMIN:-}"
+      API_API_KEY: "${API_API_KEY:-}"
+      API_API_KEY_OPS: "${API_API_KEY_OPS:-}"
+      API_API_KEY_ADMIN: "${API_API_KEY_ADMIN:-}"
+      # WebSocket allowed origins
+      WS_ALLOWED_ORIGINS: "http://127.0.0.1:8080,http://localhost:8080,http://127.0.0.1:5500,http://localhost:5500"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - alebus-net
+
+volumes:
+  pgdata:
+  redis-data:
+  emqx-data:
+  emqx-log:
+
+networks:
+  alebus-net:
+    driver: bridge

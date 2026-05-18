@@ -1,0 +1,1733 @@
+openapi: 3.0.3
+info:
+  title: Alebus HTTP API
+  version: v1
+  license:
+    name: Proprietary
+    url: https://alebus.invalid/license
+  description: |
+    Alebus API contract for:
+    - Public/commuters (React Native)
+    - Operators (Next.js dashboard)
+    - Admins (back-office + observability)
+
+    Contract-first: endpoints are defined here and mounted in Go under api/http.
+
+servers:
+  - url: http://localhost:8081
+    description: Local simulation_preview
+
+# Auth is not enforced yet in simulation_preview, but we still define a security
+# section so OpenAPI tooling can be configured consistently.
+security: []
+
+tags:
+  - name: Public
+    description: Endpoints intended for commuters / public users.
+  - name: Operator
+    description: Endpoints intended for bus operators (fleet visibility, monitoring).
+  - name: Admin
+    description: Endpoints intended for admins (management, debug, system).
+
+paths:
+  /health:
+    get:
+      tags: [Public]
+      summary: Health check (unversioned)
+      operationId: healthCheck
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '400': { $ref: '#/components/responses/Error400' }
+
+  /api/v1/health:
+    get:
+      tags: [Public]
+      summary: Health check (v1)
+      operationId: v1HealthCheck
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '400': { $ref: '#/components/responses/Error400' }
+
+  /api/v1/db/status:
+    get:
+      tags: [Admin]
+      summary: Database connection pool stats + table counts
+      operationId: getDatabaseStatus
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseStatusResponse'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/db/reset:
+    post:
+      tags: [Admin]
+      summary: Reset database tables (development only)
+      operationId: resetDatabase
+      responses:
+        '200':
+          description: Reset completed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/events:
+    get:
+      tags: [Operator]
+      summary: Get recorded domain events (debug/observability)
+      operationId: listDomainEvents
+      responses:
+        '200':
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventDTO'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/events/clear:
+    post:
+      tags: [Admin]
+      summary: Clear recorded domain events
+      operationId: clearDomainEvents
+      responses:
+        '200':
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/redis/status:
+    get:
+      tags: [Operator]
+      summary: Redis status + live bus cache stats
+      operationId: getRedisStatus
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedisStatusResponse'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/redis/reset:
+    post:
+      tags: [Admin]
+      summary: Clear Redis live bus cache (development only)
+      operationId: resetRedisCache
+      responses:
+        '200':
+          description: Reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedisResetResponse'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/redis/buses:
+    get:
+      tags: [Operator]
+      summary: Get all live buses from Redis (authoritative GPS state)
+      operationId: listRedisLiveBuses
+      responses:
+        '200':
+          description: Live buses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LiveBusSnapshotDTO'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/routes:
+    get:
+      tags: [Public]
+      summary: List routes
+      operationId: listRoutes
+      responses:
+        '200':
+          description: Routes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RouteDTO'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/routes/create:
+    post:
+      tags: [Admin]
+      summary: Create a route
+      operationId: createRoute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRouteRequest'
+      responses:
+        '200':
+          description: Route created
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/routes/status:
+    post:
+      tags: [Admin]
+      summary: Change route status
+      operationId: changeRouteStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeRouteStatusRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/routes/sample:
+    post:
+      tags: [Admin]
+      summary: Load sample routes (development only)
+      operationId: loadSampleRoutes
+      responses:
+        '200':
+          description: Loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/routes/recalculate:
+    post:
+      tags: [Admin]
+      summary: Recalculate route cumulative distances (migration tool)
+      operationId: recalculateRouteDistances
+      responses:
+        '200':
+          description: Completed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/stops/nearby:
+    get:
+      tags: [Public]
+      summary: Find nearby stops (stop snapping)
+      operationId: findNearbyStops
+      parameters:
+        - in: query
+          name: lat
+          required: true
+          schema: { type: number, format: double }
+        - in: query
+          name: lon
+          required: true
+          schema: { type: number, format: double }
+        - in: query
+          name: radius
+          required: false
+          schema: { type: number, format: double, default: 500 }
+      responses:
+        '200':
+          description: Stops found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NearbyStopsResponse'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/debug/gps-enrichment:
+    get:
+      tags: [Admin]
+      summary: Debug GPS enrichment / stop-index projection
+      operationId: debugGpsEnrichment
+      parameters:
+        - in: query
+          name: busId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: routeId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: lat
+          required: false
+          schema: { type: number, format: double }
+        - in: query
+          name: lon
+          required: false
+          schema: { type: number, format: double }
+        - in: query
+          name: lastStopIndex
+          required: false
+          schema: { type: integer, format: int32 }
+        - in: query
+          name: direction
+          required: false
+          schema: { type: integer, format: int32 }
+        - in: query
+          name: timestampMs
+          required: false
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Debug response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses:
+    get:
+      tags: [Operator]
+      summary: List buses (includes live GPS state when Redis enabled)
+      operationId: listBuses
+      responses:
+        '200':
+          description: Buses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BusDTO'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses/create:
+    post:
+      tags: [Admin]
+      summary: Create a bus
+      operationId: createBus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBusRequest'
+      responses:
+        '200':
+          description: Bus created
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses/direction:
+    post:
+      tags: [Operator]
+      summary: Change bus direction
+      operationId: changeBusDirection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeBusDirectionRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses/status:
+    post:
+      tags: [Operator]
+      summary: Change bus status
+      operationId: changeBusStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeBusStatusRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses/device/provision:
+    post:
+      tags: [Admin]
+      summary: Provision per-bus MQTT credentials for a physical GPS tracker
+      operationId: provisionBusDevice
+      description: |
+        Returns a one-time MQTT password for a device to publish raw GPS to `bus/{busId}/gps`.
+        The password is stored hashed and is not retrievable later.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvisionBusDeviceRequest'
+      responses:
+        '200':
+          description: Provisioned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProvisionBusDeviceResponse'
+        '404': { $ref: '#/components/responses/Error404' }
+        '409':
+          description: Active device already exists
+          content:
+            text/plain:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses/device/revoke:
+    post:
+      tags: [Admin]
+      summary: Revoke the active tracker device for a bus
+      operationId: revokeBusDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeBusDeviceRequest'
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeBusDeviceResponse'
+        '404': { $ref: '#/components/responses/Error404' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses/sample-raw:
+    post:
+      tags: [Admin]
+      summary: Load raw-GPS sample buses (development only)
+      operationId: loadRawGpsSampleBuses
+      responses:
+        '200':
+          description: Loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses/simulate-gps:
+    post:
+      tags: [Admin]
+      summary: Publish a raw GPS message for a single bus (dev/test)
+      operationId: simulateRawGpsForBus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SimulateRawGPSRequest'
+      responses:
+        '200':
+          description: Published
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '503': { $ref: '#/components/responses/Error503' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/buses/simulate-all-gps:
+    post:
+      tags: [Admin]
+      summary: Publish raw GPS messages for all GPS-* buses (dev/test)
+      operationId: simulateRawGpsForAllBuses
+      responses:
+        '200':
+          description: Published
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '503': { $ref: '#/components/responses/Error503' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/users:
+    get:
+      tags: [Admin]
+      summary: List users
+      operationId: listUsers
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserDTO'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/users/create:
+    post:
+      tags: [Public]
+      summary: Create a user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '200':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/users/email:
+    post:
+      tags: [Public]
+      summary: Change user email
+      operationId: changeUserEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeUserEmailRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/users/subscription:
+    post:
+      tags: [Public]
+      summary: Update user subscription
+      operationId: updateUserSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubscriptionRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/users/location/add:
+    post:
+      tags: [Public]
+      summary: Add saved location
+      operationId: addSavedLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddSavedLocationRequest'
+      responses:
+        '200':
+          description: Added
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/users/location/remove:
+    post:
+      tags: [Public]
+      summary: Remove saved location
+      operationId: removeSavedLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveSavedLocationRequest'
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/users/sample:
+    post:
+      tags: [Admin]
+      summary: Load sample users (development only)
+      operationId: loadSampleUsers
+      responses:
+        '200':
+          description: Loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys:
+    get:
+      tags: [Public]
+      summary: List journeys
+      operationId: listJourneys
+      responses:
+        '200':
+          description: Journeys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JourneyDTO'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/smart-plan:
+    get:
+      tags: [Public]
+      summary: Smart planner (single vs two-leg)
+      operationId: getSmartPlan
+      parameters:
+        - in: query
+          name: originLat
+          required: true
+          schema: { type: number, format: double }
+        - in: query
+          name: originLon
+          required: true
+          schema: { type: number, format: double }
+        - in: query
+          name: destinationStopId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: radiusMeters
+          required: true
+          schema: { type: integer, format: int32, minimum: 1 }
+      responses:
+        '200':
+          description: Plan
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/two-leg-plan:
+    get:
+      tags: [Public]
+      summary: Two-leg journey plan (transfer)
+      operationId: getTwoLegJourneyPlan
+      parameters:
+        - in: query
+          name: originLat
+          required: true
+          schema: { type: number, format: double }
+        - in: query
+          name: originLon
+          required: true
+          schema: { type: number, format: double }
+        - in: query
+          name: destLat
+          required: true
+          schema: { type: number, format: double }
+        - in: query
+          name: destLon
+          required: true
+          schema: { type: number, format: double }
+        - in: query
+          name: radiusMeters
+          required: true
+          schema: { type: integer, format: int32, minimum: 1 }
+      responses:
+        '200':
+          description: Two-leg plan
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/create:
+    post:
+      tags: [Public]
+      summary: Create a journey
+      operationId: createJourney
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJourneyRequest'
+      responses:
+        '200':
+          description: Journey created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartJourneyResponse'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/refresh:
+    post:
+      tags: [Operator]
+      summary: Refresh journey tracking (recompute recommendations)
+      operationId: refreshJourneyTracking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                journeyId: { type: string }
+              required: [journeyId]
+      responses:
+        '200':
+          description: Refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartJourneyResponse'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/switch-by-location:
+    post:
+      tags: [Operator]
+      summary: Switch active bus based on proximity (Redis GEO)
+      operationId: switchJourneyByLocation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                journeyId: { type: string }
+                lat: { type: number, format: double }
+                lon: { type: number, format: double }
+              required: [journeyId]
+      responses:
+        '200':
+          description: Switch result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/arrive:
+    post:
+      tags: [Admin]
+      summary: Simulate bus arrival (dev/demo)
+      operationId: simulateJourneyArrive
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                journeyId: { type: string }
+              required: [journeyId]
+      responses:
+        '200':
+          description: Arrived
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/board:
+    post:
+      tags: [Public]
+      summary: Confirm boarding
+      operationId: confirmBoarding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmBoardingRequest'
+      responses:
+        '200':
+          description: Boarded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/decline:
+    post:
+      tags: [Public]
+      summary: Decline boarding
+      operationId: declineBoarding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeclineBoardingRequest'
+      responses:
+        '200':
+          description: Declined
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/complete:
+    post:
+      tags: [Public]
+      summary: Complete journey
+      operationId: completeJourney
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteJourneyRequest'
+      responses:
+        '200':
+          description: Completed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/cancel:
+    post:
+      tags: [Public]
+      summary: Cancel journey
+      operationId: cancelJourney
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelJourneyRequest'
+      responses:
+        '200':
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/reset:
+    post:
+      tags: [Admin]
+      summary: Reset journey to tracking (demo-only)
+      operationId: resetJourneyToTracking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                journeyId: { type: string }
+              required: [journeyId]
+      responses:
+        '200':
+          description: Reset
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/sample:
+    post:
+      tags: [Admin]
+      summary: Load sample journeys (development only)
+      operationId: loadSampleJourneys
+      responses:
+        '200':
+          description: Loaded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/fresh-recs-status:
+    get:
+      tags: [Operator]
+      summary: Check worker-driven recommendation cache status
+      operationId: getFreshRecommendationsStatus
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/journeys/tracking:
+    get:
+      tags: [Public]
+      summary: Read-only journey tracking snapshot (no recomputation, no writes)
+      operationId: getJourneyTrackingSnapshot
+      parameters:
+        - in: query
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Tracking snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyTrackingDTO'
+        '400': { $ref: '#/components/responses/Error400' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '500': { $ref: '#/components/responses/Error500' }
+
+  /api/v1/stream/live-buses:
+    get:
+      tags: [Operator]
+      summary: SSE stream of live bus updates (bus.update snapshots)
+      operationId: streamLiveBuses
+      description: |
+        Streams Server-Sent Events as `text/event-stream`.
+        Event names include `bus.update`, `ping`, and `ready`.
+
+        Request: either `routeId` or `busId` MUST be provided.
+
+        Initial hydration: the server emits an initial snapshot sequence immediately on connect,
+        then emits `ready`. Do not rely on PubSub ticks for first paint.
+
+        Payload for `bus.update` is a JSON object shaped like `SSEBusUpdateEvent`.
+      parameters:
+        - in: query
+          name: routeId
+          required: false
+          description: Route to subscribe to (required unless busId is provided).
+          schema: { type: string }
+        - in: query
+          name: busId
+          required: false
+          description: Specific bus to subscribe to (required unless routeId is provided).
+          schema: { type: string }
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SSEStreamFrame'
+        '400': { $ref: '#/components/responses/Error400' }
+        '500': { $ref: '#/components/responses/Error500' }
+        '503': { $ref: '#/components/responses/Error503' }
+
+  /api/v1/stream/journeys:
+    get:
+      tags: [Public]
+      summary: SSE stream scoped to a journey (bus.update snapshots)
+      operationId: streamJourneys
+      description: |
+        Streams Server-Sent Events as `text/event-stream`.
+        Event names include `bus.update`, `ping`, and `ready`.
+        Also emits `journey.update` when available.
+
+        Watch-list freshness: clients SHOULD pass a small explicit `busIds` list.
+        When the watch list changes after `POST /api/v1/journeys/refresh`, clients reconnect SSE
+        with the updated `busIds`. This avoids server-side polling.
+
+        Initial hydration: the server emits an initial snapshot sequence immediately on connect,
+        then emits `ready`.
+
+        Payload for `bus.update` is a JSON object shaped like `SSEBusUpdateEvent`.
+      parameters:
+        - in: query
+          name: journeyId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: busIds
+          required: false
+          description: |
+            Comma-separated list of bus IDs to watch for this SSE connection.
+            Clients reconnect with a new list when recommendations change.
+            Recommended max length is 10.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SSEStreamFrame'
+        '400': { $ref: '#/components/responses/Error400' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '500': { $ref: '#/components/responses/Error500' }
+        '503': { $ref: '#/components/responses/Error503' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Error400:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Error404:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Error500:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Error503:
+      description: Service unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/APIError'
+
+    APIError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+        requestId: { type: string }
+
+    HealthResponse:
+      type: object
+      required: [status, database]
+      properties:
+        status: { type: string }
+        database: { type: string }
+
+    PoolStatsDTO:
+      type: object
+      required: [totalConns, idleConns, acquiredConns, maxConns]
+      properties:
+        totalConns: { type: integer, format: int32 }
+        idleConns: { type: integer, format: int32 }
+        acquiredConns: { type: integer, format: int32 }
+        maxConns: { type: integer, format: int32 }
+
+    TableCountsDTO:
+      type: object
+      required: [routes, buses, users, journeys]
+      properties:
+        routes: { type: integer, format: int64 }
+        buses: { type: integer, format: int64 }
+        users: { type: integer, format: int64 }
+        journeys: { type: integer, format: int64 }
+
+    DatabaseStatusResponse:
+      type: object
+      required: [connected, pool, tables]
+      properties:
+        connected: { type: boolean }
+        pool: { $ref: '#/components/schemas/PoolStatsDTO' }
+        tables: { $ref: '#/components/schemas/TableCountsDTO' }
+
+    EventDTO:
+      type: object
+      required: [eventId, eventType, occurred]
+      properties:
+        eventId: { type: string }
+        eventType: { type: string }
+        occurred: { type: string }
+
+    StopDTO:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        lat: { type: number, format: double }
+        lon: { type: number, format: double }
+        cumulative_distance: { type: number, format: double }
+        location:
+          type: object
+          properties:
+            latitude: { type: number, format: double }
+            longitude: { type: number, format: double }
+
+    CreateStopDTO:
+      type: object
+      required: [id, name, latitude, longitude]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        latitude: { type: number, format: double }
+        longitude: { type: number, format: double }
+
+    RouteDTO:
+      type: object
+      required: [routeId, name, direction, routeType, status, stops]
+      properties:
+        routeId: { type: string }
+        name: { type: string }
+        direction: { type: string }
+        routeType: { type: string }
+        status: { type: string }
+        stops:
+          type: array
+          items: { $ref: '#/components/schemas/StopDTO' }
+        activeFrom: { type: string }
+        activeUntil: { type: string }
+        createdAt: { type: string }
+
+    CreateRouteRequest:
+      type: object
+      required: [name, stops]
+      properties:
+        routeId: { type: string }
+        name: { type: string }
+        operatorIds:
+          type: array
+          items: { type: string }
+        stops:
+          type: array
+          items: { $ref: '#/components/schemas/CreateStopDTO' }
+        direction: { type: string }
+        routeType: { type: string }
+        activeFrom: { type: string }
+        activeUntil: { type: string }
+
+    ChangeRouteStatusRequest:
+      type: object
+      required: [routeId, status]
+      properties:
+        routeId: { type: string }
+        status: { type: string }
+        reason: { type: string }
+
+    BusPositionDTO:
+      type: object
+      required: [lat, lon, timestamp, accuracy, speedKmh]
+      properties:
+        lat: { type: number, format: double }
+        lon: { type: number, format: double }
+        timestamp: { type: string, format: date-time }
+        accuracy: { type: number, format: double }
+        speedKmh: { type: number, format: double }
+
+    BusDTO:
+      type: object
+      required: [busId, operatorId, routeId, direction, stopIndex, currentSpeed, isAtTerminal, position, status, updatedAt]
+      properties:
+        busId: { type: string }
+        operatorId: { type: string }
+        routeId: { type: string }
+        direction: { type: string }
+        stopIndex: { type: integer, format: int32 }
+        currentSpeed: { type: number, format: double }
+        isAtTerminal: { type: boolean }
+        terminalArrivalTime: { type: string, format: date-time }
+        position: { $ref: '#/components/schemas/BusPositionDTO' }
+        status: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+        orderingTimestampMs:
+          type: integer
+          format: int64
+          description: |
+            Per-bus monotonic ordering timestamp in milliseconds since epoch.
+            For Redis live state, this maps to Redis `updated_at` (ordering_ts_ms).
+        deviceTimestampMs:
+          type: integer
+          format: int64
+          description: Raw device-reported timestamp in milliseconds since epoch (untrusted metadata).
+        receivedAtMs:
+          type: integer
+          format: int64
+          description: Server ingress time in milliseconds since epoch (trusted metadata; basis for freshness).
+
+    SSEStreamFrame:
+      type: object
+      description: |
+        Conceptual representation of a single SSE frame for Alebus streams.
+
+        This is not the raw on-the-wire format (which is `text/event-stream` lines).
+        Instead:
+        - `event` corresponds to the SSE `event:` field
+        - `data` corresponds to the JSON parsed from the SSE `data:` field
+      required: [event, data]
+      properties:
+        event:
+          type: string
+          enum: [bus.update, journey.update, ready, ping]
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/SSEBusUpdateEvent'
+            - $ref: '#/components/schemas/SSEJourneyUpdateEvent'
+            - $ref: '#/components/schemas/SSEReadyEvent'
+            - $ref: '#/components/schemas/SSEPingEvent'
+
+    SSEBusUpdateEvent:
+      type: object
+      description: |
+        JSON payload emitted as `data:` for `event: bus.update`.
+      required: [serverTs, bus]
+      properties:
+        serverTs:
+          type: string
+          format: date-time
+          description: When the server emitted this SSE frame.
+        seq:
+          type: integer
+          format: int64
+          description: Optional monotonic sequence number per SSE connection.
+        bus:
+          $ref: '#/components/schemas/BusDTO'
+
+    SSEReadyEvent:
+      type: object
+      description: |
+        Optional JSON payload emitted as `data:` for `event: ready`.
+      required: [serverTs]
+      properties:
+        serverTs:
+          type: string
+          format: date-time
+        stream:
+          type: string
+          description: Stream identifier (e.g., "live-buses" or "journeys").
+
+    SSEPingEvent:
+      type: object
+      description: |
+        JSON payload emitted as `data:` for `event: ping`.
+      required: [serverTs]
+      properties:
+        serverTs:
+          type: string
+          format: date-time
+
+    CreateBusRequest:
+      type: object
+      required: [operatorId, routeId, lat, lon]
+      properties:
+        busId: { type: string }
+        operatorId: { type: string }
+        routeId: { type: string }
+        lat: { type: number, format: double }
+        lon: { type: number, format: double }
+        accuracy: { type: number, format: double }
+        speedKmh: { type: number, format: double }
+        direction:
+          description: Can be int (0/1) or string ("outbound"/"inbound")
+          oneOf:
+            - { type: integer, format: int32 }
+            - { type: string }
+
+    ChangeBusDirectionRequest:
+      type: object
+      required: [busId, direction]
+      properties:
+        busId: { type: string }
+        direction:
+          oneOf:
+            - { type: integer, format: int32 }
+            - { type: string }
+
+    ChangeBusStatusRequest:
+      type: object
+      required: [busId, status]
+      properties:
+        busId: { type: string }
+        status: { type: integer, format: int32 }
+        reason: { type: string }
+
+    ProvisionBusDeviceRequest:
+      type: object
+      required: [busId]
+      properties:
+        busId: { type: string }
+        rotateIfExists:
+          type: boolean
+          description: When true, revokes the previous active device and provisions a new one.
+
+    ProvisionBusDeviceResponse:
+      type: object
+      required: [deviceId, busId, mqttUsername, mqttPassword, topic]
+      properties:
+        deviceId: { type: string }
+        busId: { type: string }
+        mqttUsername: { type: string }
+        mqttPassword:
+          type: string
+          description: One-time secret. Not retrievable after provisioning.
+        topic:
+          type: string
+          description: MQTT topic the device must publish to (bus/{busId}/gps).
+
+    RevokeBusDeviceRequest:
+      type: object
+      required: [busId]
+      properties:
+        busId: { type: string }
+
+    RevokeBusDeviceResponse:
+      type: object
+      required: [busId, deviceId, revoked]
+      properties:
+        busId: { type: string }
+        deviceId: { type: string }
+        revoked: { type: boolean }
+
+    SavedLocationDTO:
+      type: object
+      required: [id, name, lat, lon, type, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        lat: { type: number, format: double }
+        lon: { type: number, format: double }
+        type: { type: integer, format: int32 }
+        createdAt: { type: string }
+
+    SubscriptionDTO:
+      type: object
+      required: [status, plan, startDate, expiryDate]
+      properties:
+        status: { type: integer, format: int32 }
+        plan: { type: integer, format: int32 }
+        startDate: { type: string }
+        expiryDate: { type: string }
+
+    UserDTO:
+      type: object
+      required: [userId, email, subscription, savedLocations, createdAt]
+      properties:
+        userId: { type: string }
+        email: { type: string }
+        subscription: { $ref: '#/components/schemas/SubscriptionDTO' }
+        savedLocations:
+          type: array
+          items: { $ref: '#/components/schemas/SavedLocationDTO' }
+        createdAt: { type: string }
+
+    CreateUserRequest:
+      type: object
+      required: [email]
+      properties:
+        userId: { type: string }
+        email: { type: string }
+
+    ChangeUserEmailRequest:
+      type: object
+      required: [userId, newEmail]
+      properties:
+        userId: { type: string }
+        newEmail: { type: string }
+
+    UpdateSubscriptionRequest:
+      type: object
+      required: [userId, status, plan]
+      properties:
+        userId: { type: string }
+        status: { type: integer, format: int32 }
+        plan: { type: integer, format: int32 }
+        startDate: { type: string }
+        expiryDate: { type: string }
+
+    AddSavedLocationRequest:
+      type: object
+      required: [userId, name, lat, lon]
+      properties:
+        userId: { type: string }
+        name: { type: string }
+        lat: { type: number, format: double }
+        lon: { type: number, format: double }
+        type: { type: integer, format: int32 }
+
+    RemoveSavedLocationRequest:
+      type: object
+      required: [userId, locationId]
+      properties:
+        userId: { type: string }
+        locationId: { type: string }
+
+    JourneyBusRecommendationDTO:
+      type: object
+      required:
+        - bus_id
+        - operator_id
+        - estimated_arrival
+        - distance_to_origin_stop
+        - direction
+        - required_direction
+        - is_wrong_direction
+        - confidence_level
+        - display_text
+        - ranking_score
+        - actual_route_distance
+      properties:
+        bus_id: { type: string }
+        operator_id: { type: string }
+        estimated_arrival: { type: integer, format: int64, description: nanoseconds duration }
+        distance_to_origin_stop: { type: number, format: double }
+        direction: { type: integer, format: int32 }
+        required_direction: { type: integer, format: int32 }
+        is_wrong_direction: { type: boolean }
+        confidence_level: { type: number, format: double }
+        display_text: { type: string }
+        ranking_score: { type: number, format: double }
+        actual_route_distance: { type: number, format: double }
+
+    JourneyDTO:
+      type: object
+      required: [journeyId, userId, status, phase, originStopId, destinationStopId, requiredDirection, recommendations, startedAt, updatedAt]
+      properties:
+        journeyId: { type: string }
+        userId: { type: string }
+        status: { type: integer, format: int32 }
+        phase: { type: integer, format: int32 }
+        originStopId: { type: string }
+        destinationStopId: { type: string }
+        requiredDirection: { type: integer, format: int32 }
+        activeBusId: { type: string }
+        recommendations:
+          type: array
+          items: { $ref: '#/components/schemas/JourneyBusRecommendationDTO' }
+        startedAt: { type: string }
+        updatedAt: { type: string }
+
+    BusRecommendationDTO:
+      type: object
+      required: [busId, operatorId, estimatedArrival, distanceMeters, direction, isWrongDirection, confidenceLevel, displayText]
+      properties:
+        busId: { type: string }
+        operatorId: { type: string }
+        estimatedArrival:
+          type: integer
+          format: int64
+          description: milliseconds
+        distanceMeters: { type: number, format: double }
+        direction: { type: integer, format: int32 }
+        isWrongDirection: { type: boolean }
+        confidenceLevel: { type: number, format: double }
+        displayText: { type: string }
+
+    JourneyTrackingDTO:
+      type: object
+      required:
+        - journeyId
+        - userId
+        - status
+        - statusName
+        - originLat
+        - originLon
+        - originStopId
+        - destinationStopId
+        - requiredDirection
+        - activeBusId
+        - proximityLevel
+        - proximityName
+        - recommendations
+        - declineCount
+        - estimatedDuration
+        - expiresAt
+        - createdAt
+        - updatedAt
+      properties:
+        journeyId: { type: string }
+        userId: { type: string }
+        status: { type: integer, format: int32 }
+        statusName: { type: string }
+        originLat: { type: number, format: double }
+        originLon: { type: number, format: double }
+        originStopId: { type: string }
+        destinationStopId: { type: string }
+        requiredDirection: { type: integer, format: int32 }
+        activeBusId: { type: string }
+        proximityLevel: { type: integer, format: int32 }
+        proximityName: { type: string }
+        recommendations:
+          type: array
+          items: { $ref: '#/components/schemas/BusRecommendationDTO' }
+        boardingWindowStart:
+          type: string
+          nullable: true
+          description: RFC3339 timestamp
+        boardedAt:
+          type: string
+          nullable: true
+          description: RFC3339 timestamp
+        declineCount: { type: integer, format: int32 }
+        estimatedDuration:
+          type: integer
+          format: int64
+          description: milliseconds
+        expiresAt: { type: string, description: RFC3339 timestamp }
+        createdAt: { type: string, description: RFC3339 timestamp }
+        updatedAt: { type: string, description: RFC3339 timestamp }
+
+    CreateJourneyRequest:
+      type: object
+      required: [userId, originLat, originLon, destinationStopId]
+      properties:
+        journeyId: { type: string }
+        userId: { type: string }
+        originLat: { type: number, format: double }
+        originLon: { type: number, format: double }
+        originStopId: { type: string }
+        destinationStopId: { type: string }
+        radiusMeters: { type: number, format: double }
+
+    StartJourneyResponse:
+      type: object
+      required: [journeyId, originStopId, destinationStopId, requiredDirection, recommendations, estimatedDurationMs]
+      properties:
+        journeyId: { type: string }
+        originStopId: { type: string }
+        destinationStopId: { type: string }
+        requiredDirection: { type: integer, format: int32 }
+        recommendations:
+          type: array
+          items: { $ref: '#/components/schemas/JourneyBusRecommendationDTO' }
+        estimatedDurationMs: { type: integer, format: int64 }
+
+    ConfirmBoardingRequest:
+      type: object
+      required: [journeyId]
+      properties:
+        journeyId: { type: string }
+        busId: { type: string }
+
+    DeclineBoardingRequest:
+      type: object
+      required: [journeyId]
+      properties:
+        journeyId: { type: string }
+        reason: { type: string }
+
+    CompleteJourneyRequest:
+      type: object
+      required: [journeyId]
+      properties:
+        journeyId: { type: string }
+
+    CancelJourneyRequest:
+      type: object
+      required: [journeyId]
+      properties:
+        journeyId: { type: string }
+        reason: { type: string }
+
+    RedisStatusResponse:
+      type: object
+      required: [connected, enabled, url, liveBusCount, geoIndexCount]
+      properties:
+        connected: { type: boolean }
+        enabled: { type: boolean }
+        url: { type: string }
+        liveBusCount: { type: integer, format: int32 }
+        geoIndexCount: { type: integer, format: int32 }
+        error: { type: string }
+
+    LiveBusSnapshotDTO:
+      type: object
+      required: [busId, routeId, lat, lon, speedKmh, heading, direction, stopIndex, lastUpdate, ttlRemaining]
+      properties:
+        busId: { type: string }
+        routeId: { type: string }
+        lat: { type: number, format: double }
+        lon: { type: number, format: double }
+        speedKmh: { type: number, format: double }
+        heading: { type: number, format: double }
+        direction: { type: string }
+        stopIndex: { type: integer, format: int32 }
+        lastUpdate: { type: string }
+        ttlRemaining: { type: integer, format: int64 }
+
+    RedisResetResponse:
+      type: object
+      required: [success, keysDeleted, busesCleared]
+      properties:
+        success: { type: boolean }
+        keysDeleted: { type: integer, format: int64 }
+        busesCleared: { type: integer, format: int32 }
+
+    NearbyStopDTO:
+      type: object
+      required: [stopId, name, index, distanceMeters]
+      properties:
+        stopId: { type: string }
+        name: { type: string }
+        index: { type: integer, format: int32 }
+        distanceMeters: { type: number, format: double }
+
+    NearbyStopsResponse:
+      type: object
+      properties:
+        stops:
+          type: array
+          items: { $ref: '#/components/schemas/NearbyStopDTO' }
+
+    SimulateRawGPSRequest:
+      type: object
+      required: [bus_id, lat, lon]
+      properties:
+        bus_id: { type: string }
+        lat: { type: number, format: double }
+        lon: { type: number, format: double }
+        speed_kmh: { type: number, format: double }
+        heading: { type: number, format: double }

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Alebus Admin – Device Provisioning</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="header">
+      <div>
+        <h1>Alebus Admin</h1>
+        <p class="muted">Provision/revoke MQTT credentials for an Android phone (or tracker) per bus.</p>
+      </div>
+      <div class="badge">admin_ui</div>
+    </header>
+
+    <section class="card">
+      <h2>Backend</h2>
+      <div class="grid">
+        <label class="field">
+          <span>API Base URL</span>
+          <input id="baseUrl" type="url" placeholder="http://localhost:8081" />
+          <small class="muted">This should point to your Simulation Preview server (it enables CORS).</small>
+        </label>
+        <div class="actions">
+          <button id="btnHealth" class="btn">Check health</button>
+          <button id="btnOpenSwagger" class="btn secondary">Open OpenAPI</button>
+        </div>
+      </div>
+      <div id="healthStatus" class="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card">
+      <h2>Provision Device</h2>
+      <div class="grid">
+        <label class="field">
+          <span>Bus ID</span>
+          <input id="busId" type="text" placeholder="ANDROID-001" />
+          <small class="muted">Must match the bus you will publish to: <code>bus/{busId}/gps</code></small>
+        </label>
+
+        <label class="field inline">
+          <input id="rotate" type="checkbox" />
+          <span>Rotate if active device exists</span>
+        </label>
+
+        <div class="actions">
+          <button id="btnProvision" class="btn primary">Provision</button>
+          <button id="btnRevoke" class="btn danger">Revoke active device</button>
+        </div>
+      </div>
+
+      <div class="notice">
+        <strong>Security note:</strong> the returned password is <em>one-time</em>. It is stored only as a bcrypt hash in Postgres.
+        This UI will not save the password in localStorage.
+      </div>
+
+      <div id="result" class="result" hidden>
+        <div class="result-row">
+          <div class="result-label">Topic</div>
+          <div class="result-value"><code id="outTopic"></code></div>
+          <button class="btn tiny" data-copy="outTopic">Copy</button>
+        </div>
+        <div class="result-row">
+          <div class="result-label">MQTT Username</div>
+          <div class="result-value"><code id="outUser"></code></div>
+          <button class="btn tiny" data-copy="outUser">Copy</button>
+        </div>
+        <div class="result-row">
+          <div class="result-label">MQTT Password</div>
+          <div class="result-value"><code id="outPass"></code></div>
+          <button class="btn tiny" data-copy="outPass">Copy</button>
+        </div>
+        <div class="result-row">
+          <div class="result-label">Device ID</div>
+          <div class="result-value"><code id="outDevice"></code></div>
+          <button class="btn tiny" data-copy="outDevice">Copy</button>
+        </div>
+
+        <div class="actions">
+          <button id="btnDownload" class="btn secondary">Download config JSON</button>
+          <button id="btnHidePassword" class="btn secondary">Hide password</button>
+        </div>
+
+        <details class="payload">
+          <summary>Android payload template</summary>
+          <pre id="payloadTemplate"></pre>
+        </details>
+      </div>
+
+      <div id="opStatus" class="status" aria-live="polite"></div>
+    </section>
+
+    <section class="card">
+      <h2>Send Test GPS</h2>
+      <p class="muted">Publishes RAW GPS via Simulation Preview → EMQX → ingestor → Redis. Uses <code>POST /api/v1/buses/simulate-gps</code>.</p>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr;">
+        <label class="field">
+          <span>Latitude</span>
+          <input id="gpsLat" type="number" step="any" placeholder="-20.2748" />
+        </label>
+
+        <label class="field">
+          <span>Longitude</span>
+          <input id="gpsLon" type="number" step="any" placeholder="57.3669" />
+        </label>
+
+        <label class="field">
+          <span>Speed (km/h)</span>
+          <input id="gpsSpeed" type="number" step="any" placeholder="10" />
+        </label>
+
+        <label class="field">
+          <span>Heading (deg)</span>
+          <input id="gpsHeading" type="number" step="any" placeholder="180" />
+        </label>
+      </div>
+
+      <div class="actions" style="margin-top: 0.75rem;">
+        <button id="btnSendGps" class="btn primary">Send GPS Now</button>
+      </div>
+      <div id="gpsStatus" class="status" aria-live="polite"></div>
+      <div class="notice">
+        <strong>Note:</strong> this requires Simulation Preview to be started with MQTT publishing enabled
+        (<code>MQTT_BROKER_URL</code> + <code>SIM_PREVIEW_MQTT_CLIENT_ID</code>). If you see a 503 error, that’s what’s missing.
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="muted">
+        Tip: run this UI via a local static server (e.g. VS Code Live Server or Python) so clipboard + fetch behave consistently.
+      </div>
+      <a class="link" href="README.md">admin_ui README</a>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

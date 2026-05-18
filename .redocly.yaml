@@ -1,0 +1,17 @@
+extends:
+  - recommended
+
+apis:
+  alebus-v1:
+    root: api/openapi.yaml
+
+rules:
+  # This repo's OpenAPI file uses localhost for dev/simulation.
+  no-server-example.com: off
+
+  # Keep these as warnings for now; we'll promote to errors later.
+  operation-operationId: warn
+  operation-4xx-response: warn
+
+  # Keep security-defined on; we satisfy it via root-level security: []
+  security-defined: error

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alebus Redis Observability</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="header">
+        <h1>Redis Observability</h1>
+        <div class="links">
+          <a class="btn" href="/api/redis/status" target="_blank" rel="noreferrer">Status JSON</a>
+          <a class="btn" href="/metrics" target="_blank" rel="noreferrer">Prometheus Metrics</a>
+          <a class="btn" href="http://localhost:3000" target="_blank" rel="noreferrer">Grafana</a>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="row">
+          <div>
+            <div class="label">Connection</div>
+            <div id="conn" class="value">Loading…</div>
+          </div>
+          <div>
+            <div class="label">Mode</div>
+            <div id="mode" class="value">—</div>
+          </div>
+          <div>
+            <div class="label">Master</div>
+            <div id="master" class="value">—</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <div class="card">
+          <div class="label">Active buses</div>
+          <div id="active" class="value">—</div>
+        </div>
+        <div class="card">
+          <div class="label">Offline buses</div>
+          <div id="offline" class="value">—</div>
+        </div>
+        <div class="card">
+          <div class="label">Total buses</div>
+          <div id="total" class="value">—</div>
+        </div>
+        <div class="card">
+          <div class="label">Redis memory</div>
+          <div id="mem" class="value">—</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="label">Health</div>
+        <pre id="health" class="pre">—</pre>
+        <div class="footer">
+          <button id="refresh" class="btn">Refresh</button>
+          <span id="ts" class="muted"></span>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

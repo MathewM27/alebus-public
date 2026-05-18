@@ -1,0 +1,68 @@
+# ============================================================================
+# DEPRECATED — Use compose/dev.yml for local development
+# ============================================================================
+# This file provides observability stack: Prometheus + Grafana + custom metrics exporter.
+#
+# CRITICAL WARNING: Exposes Prometheus on port 9090, which COLLIDES with alebus-simulator.
+# Do NOT run this stack simultaneously with dev stack.
+#
+# TODO: Update Prometheus port to 9091 when observability is re-enabled.
+#
+# For local dev, use: make dev-up
+# ============================================================================
+
+services:
+  observability-server:
+    build:
+      context: .
+      dockerfile: cmd/observability/Dockerfile
+    container_name: alebus-observability
+    restart: unless-stopped
+    environment:
+      OBS_PORT: 9099
+      REDIS_MASTER_NAME: mymaster
+      REDIS_SENTINEL_ADDRS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      # Optional:
+      # REDIS_PASSWORD: ""
+      # REDIS_SENTINEL_PASSWORD: ""
+    ports:
+      - "9099:9099"
+    networks:
+      - alebus-network
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: alebus-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - observability-server
+    networks:
+      - alebus-network
+
+  grafana:
+    image: grafana/grafana-oss:11.1.0
+    container_name: alebus-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/redis/grafana_dashboard.json:/var/lib/grafana/dashboards/alebus-redis.json:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - alebus-network
+
+networks:
+  alebus-network:
+    name: alebus-network

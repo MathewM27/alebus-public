@@ -1,0 +1,127 @@
+# =============================================================================
+# Defense-in-depth .gitignore for the public Alebus showcase.
+#
+# The IP-bearing files (journey resolver/automation/usecase impls, atomic Redis
+# Lua scripts, internal audits, frontend impl docs, simulators) were removed
+# from disk before the first commit, so they are NOT recoverable from this
+# repo's history. The patterns below exist to prevent accidental re-introduction
+# if you ever copy files in from the private repo or a teammate's fork.
+# =============================================================================
+
+# ─── Secrets / environment ──────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+**/credentials.json
+**/service-account*.json
+*.pem
+*.key
+
+# ─── Go build / test artifacts ──────────────────────────────────────────────
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+dist/
+coverage.out
+coverage.html
+cover
+profile.out
+cpu.prof
+mem.prof
+
+# ─── IDE / OS ───────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Temp ───────────────────────────────────────────────────────────────────
+tmp/
+temp/
+*.tmp
+
+# ─── Node / JS ──────────────────────────────────────────────────────────────
+**/node_modules/
+**/.npm/
+**/.pnpm-store/
+**/.yarn/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+**/package-lock.json
+**/pnpm-lock.yaml
+**/yarn.lock
+.next/
+out/
+
+# ─── Proprietary algorithm packages (re-introduction guard) ─────────────────
+# Do not check these back in. The public repo deliberately ships only the
+# ports/DTOs/contracts under application/journey/{ports,dto,readmodel,...}.
+application/journey/automation/*.go
+application/journey/usecase/*.go
+application/journey/resolver/
+application/journey/shared/
+application/journey/adapters/
+application/journey/testhelpers/
+
+# ─── Proprietary Redis runtime (re-introduction guard) ──────────────────────
+infrastructure/redis/lua_scripts.go
+infrastructure/redis/route_geometry_cache*.go
+infrastructure/redis/resolver_state_store*.go
+infrastructure/redis/anomaly_detector*.go
+infrastructure/redis/alerting*.go
+infrastructure/redis/bus_proximity_finder*.go
+infrastructure/redis/live_bus_finder*.go
+infrastructure/redis/live_bus_state_reader*.go
+infrastructure/redis/livebus_updates_hub*.go
+infrastructure/redis/journey_updates_hub*.go
+infrastructure/redis/assignment_cache*.go
+infrastructure/redis/notification_gate*.go
+infrastructure/redis/failover_test_utils.go
+infrastructure/redis/load_test.go
+infrastructure/redis/phase3_test.go
+infrastructure/redis/atomic_*.go
+
+# Repository sources that pair with the omitted Redis caches
+infrastructure/repositories/route_geometry_source*.go
+infrastructure/repositories/assignment_source.go
+
+# ─── Proprietary binaries / simulators (re-introduction guard) ──────────────
+cmd/journey_worker/
+cmd/emqx_ingestor/
+cmd/gps_simulator/
+cmd/simulator/
+simulation_preview/
+
+# ─── Internal docs / audits / design traces ────────────────────────────────
+audit.md
+frontend-layer.md
+docs/journey_mismatch.md
+docs/GPS_MICROSTEPPING_IMPLEMENTATION.md
+docs/GPS_STEP_LOGIC_TRACE.md
+docs/PHASE_2_SCOPE.md
+docs/dockers_running*.md
+docs/journey_*.md
+**/summary.md
+**/summary_*.md
+**/explained.md
+**/explanation.md
+**/blueprint_*.md
+**/redis_architecture.md
+.github/instructions/
+
+# ─── AI assistant memory / scratch ──────────────────────────────────────────
+.claude/
+.cursor/
+CLAUDE.md
+.aider*

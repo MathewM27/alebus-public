@@ -1,0 +1,237 @@
+# Docker Compose for Redis Sentinel High Availability Setup
+# Phase 3: Redis Resilience & Optimization
+#
+# Topology:
+#   - 1 Redis Master
+#   - 2 Redis Replicas
+#   - 3 Sentinel nodes (quorum = 2)
+#
+# Usage:
+#   docker-compose -f docker-compose.sentinel.yml up -d
+#
+# Failover Test:
+#   docker stop alebus-redis-master
+#   docker exec alebus-sentinel-1 redis-cli -p 26379 sentinel master mymaster
+
+# ============================================================================
+# DEPRECATED — Use compose/dev.yml for local development
+# ============================================================================
+# This file provides a Redis Sentinel HA setup (1 master + 2 replicas + 3 sentinels).
+# Intended for production-like testing only.
+#
+# WARNING: Do NOT run this stack simultaneously with dev stack.
+# Causes port collisions (6379) and Redis topology conflicts.
+#
+# For local dev, use: make dev-up
+# ============================================================================
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # PostgreSQL (unchanged from base)
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: alebus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-alebus}
+      POSTGRES_USER: ${POSTGRES_USER:-alebus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alebus}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alebus -d alebus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - alebus-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Redis Master
+  # ─────────────────────────────────────────────────────────────────────────────
+  redis-master:
+    image: redis:7.2-alpine
+    container_name: alebus-redis-master
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+      --replica-announce-ip redis-master
+      --replica-announce-port 6379
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-master-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - alebus-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Redis Replica 1
+  # ─────────────────────────────────────────────────────────────────────────────
+  redis-replica-1:
+    image: redis:7.2-alpine
+    container_name: alebus-redis-replica-1
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+      --replicaof redis-master 6379
+      --replica-announce-ip redis-replica-1
+      --replica-announce-port 6379
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-replica-1-data:/data
+    depends_on:
+      - redis-master
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - alebus-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Redis Replica 2
+  # ─────────────────────────────────────────────────────────────────────────────
+  redis-replica-2:
+    image: redis:7.2-alpine
+    container_name: alebus-redis-replica-2
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+      --replicaof redis-master 6379
+      --replica-announce-ip redis-replica-2
+      --replica-announce-port 6379
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis-replica-2-data:/data
+    depends_on:
+      - redis-master
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - alebus-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Sentinel 1
+  # ─────────────────────────────────────────────────────────────────────────────
+  sentinel-1:
+    image: redis:7.2-alpine
+    container_name: alebus-sentinel-1
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'sentinel resolve-hostnames yes' > /tmp/sentinel.conf &&
+        echo 'sentinel monitor mymaster redis-master 6379 2' >> /tmp/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+        echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+        redis-server /tmp/sentinel.conf --sentinel
+      "
+    ports:
+      - "26379:26379"
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - alebus-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Sentinel 2
+  # ─────────────────────────────────────────────────────────────────────────────
+  sentinel-2:
+    image: redis:7.2-alpine
+    container_name: alebus-sentinel-2
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'sentinel resolve-hostnames yes' > /tmp/sentinel.conf &&
+        echo 'sentinel monitor mymaster redis-master 6379 2' >> /tmp/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+        echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+        redis-server /tmp/sentinel.conf --sentinel
+      "
+    ports:
+      - "26380:26379"
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - alebus-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Sentinel 3
+  # ─────────────────────────────────────────────────────────────────────────────
+  sentinel-3:
+    image: redis:7.2-alpine
+    container_name: alebus-sentinel-3
+    restart: unless-stopped
+    command: >
+      sh -c "
+        echo 'sentinel resolve-hostnames yes' > /tmp/sentinel.conf &&
+        echo 'sentinel monitor mymaster redis-master 6379 2' >> /tmp/sentinel.conf &&
+        echo 'sentinel down-after-milliseconds mymaster 5000' >> /tmp/sentinel.conf &&
+        echo 'sentinel failover-timeout mymaster 10000' >> /tmp/sentinel.conf &&
+        echo 'sentinel parallel-syncs mymaster 1' >> /tmp/sentinel.conf &&
+        redis-server /tmp/sentinel.conf --sentinel
+      "
+    ports:
+      - "26381:26379"
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - alebus-network
+
+networks:
+  alebus-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redis-master-data:
+  redis-replica-1-data:
+  redis-replica-2-data:

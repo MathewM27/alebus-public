@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alebus - Observability Pipeline Debugger</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚌 Alebus Observability Pipeline</h1>
+            <p class="subtitle">Real-time GPS → Enrichment → Redis → Recommendation Flow</p>
+        </header>
+
+        <div class="controls">
+            <button id="stepAllBuses" class="btn-primary">▶️ Step All Buses</button>
+            <button id="clearLogs" class="btn-secondary">🗑️ Clear Logs</button>
+            <button id="refreshData" class="btn-secondary">🔄 Refresh Data</button>
+            
+            <div class="config">
+                <label>
+                    <input type="checkbox" id="autoRefresh" />
+                    Auto-refresh (5s)
+                </label>
+                <label>
+                    Interpolate:
+                    <input type="number" id="interpolatePoints" value="10" min="1" max="50" />
+                </label>
+            </div>
+        </div>
+
+        <div style="margin: 12px 0; padding: 12px; background: rgba(255, 193, 7, 0.1); border-left: 3px solid #ffc107; font-size: 0.9em; border-radius: 4px;">
+            ⚠️ <strong>Expected Behavior:</strong> "Step All Buses" causes instant GPS teleportation. The ingestor's data quality checks will reject these as <code>impossible_gps_jump</code>. For smooth enrichment that shows working pipeline, use <a href="http://127.0.0.1:8080" target="_blank" style="color: #4fc3f7; text-decoration: underline;">simulation_preview</a> instead.
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="label">Simulator:</span>
+                <span id="simulatorStatus" class="status">⚪ Unknown</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Ingestor:</span>
+                <span id="ingestorStatus" class="status">⚪ Unknown</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Redis:</span>
+                <span id="redisStatus" class="status">⚪ Unknown</span>
+            </div>
+            <div class="status-item">
+                <span class="label">Last Update:</span>
+                <span id="lastUpdate">Never</span>
+            </div>
+        </div>
+
+        <div class="pipeline-grid">
+            <!-- Stage 1: Raw GPS (MQTT) -->
+            <div class="pipeline-stage">
+                <div class="stage-header stage-mqtt">
+                    <h2>📡 1. Raw GPS (MQTT)</h2>
+                    <span class="stage-subtitle">From Ingestor Port 9100</span>
+                </div>
+                <div id="rawGpsLogs" class="logs-container">
+                    <div class="empty-state">Click "Step All Buses" to capture MQTT events</div>
+                </div>
+            </div>
+
+            <!-- Stage 2: Enrichment -->
+            <div class="pipeline-stage">
+                <div class="stage-header stage-enrichment">
+                    <h2>⚙️ 2. Enrichment</h2>
+                    <span class="stage-subtitle">Route/Stop Calculation</span>
+                </div>
+                <div id="enrichmentLogs" class="logs-container">
+                    <div class="empty-state">Enrichment results will appear here</div>
+                </div>
+            </div>
+
+            <!-- Stage 3: Redis State -->
+            <div class="pipeline-stage">
+                <div class="stage-header stage-redis">
+                    <h2>💾 3. Redis State</h2>
+                    <span class="stage-subtitle">Final Enriched Bus State</span>
+                </div>
+                <div id="redisLogs" class="logs-container">
+                    <div class="empty-state">Redis state will appear here</div>
+                </div>
+            </div>
+
+            <!-- Stage 4: Recommendations -->
+            <div class="pipeline-stage">
+                <div class="stage-header stage-recommendations">
+                    <h2>🎯 4. Recommendations</h2>
+                    <span class="stage-subtitle">Journey Bus Ranking</span>
+                </div>
+                <div id="recommendationsLogs" class="logs-container">
+                    <div class="empty-state">Journey recommendations will appear here</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="debug-section">
+            <details>
+                <summary>🔧 Debug Info</summary>
+                <div id="debugInfo" class="debug-content">
+                    <pre id="debugText">No debug data yet</pre>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

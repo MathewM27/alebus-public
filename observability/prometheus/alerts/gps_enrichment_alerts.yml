@@ -1,0 +1,323 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GPS Enrichment Alerting Rules (Phase 6 - Option B+)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# These alerts monitor GPS enrichment health and performance.
+# Load into Prometheus via rule_files configuration.
+#
+# Usage:
+#   rule_files:
+#     - /etc/prometheus/alerts/gps_enrichment_alerts.yml
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+groups:
+  - name: gps_enrichment_alerts
+    rules:
+      # ─────────────────────────────────────────────────────────────────────────
+      # High Rate of Missing Assignments
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSEnrichmentNoAssignment
+        expr: |
+          rate(alebus_ingestor_gps_enrichment_total{status="no_assignment"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "High rate of GPS messages without bus assignments"
+          description: |
+            More than 0.1 GPS messages per second are being rejected due to
+            missing bus-to-route assignments. This could indicate:
+            - Buses not assigned to routes in the system
+            - Assignment cache issues
+            - GPS messages from unknown buses
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_no_assignment"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # High Rate of Infrastructure Errors
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSEnrichmentInfraError
+        expr: |
+          rate(alebus_ingestor_gps_enrichment_total{status="infra_error"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: gps_enrichment
+        annotations:
+          summary: "GPS enrichment infrastructure errors detected"
+          description: |
+            GPS enrichment is failing due to infrastructure issues (Redis, Postgres).
+            Current rate: {{ $value | printf "%.3f" }} errors/sec
+            
+            Possible causes:
+            - Redis unavailable or slow
+            - Postgres connection issues
+            - Network problems
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_infra_error"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Route Not Found Errors
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSEnrichmentRouteNotFound
+        expr: |
+          rate(alebus_ingestor_gps_enrichment_total{status="route_not_found"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "GPS messages referencing non-existent routes"
+          description: |
+            Bus assignments reference routes that don't exist in the geometry cache.
+            This could indicate:
+            - Route geometry cache not populated
+            - Stale assignments pointing to deleted routes
+            - Data consistency issues between assignment and route tables
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_route_not_found"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # High Invalid Payload Rate
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSEnrichmentInvalidPayload
+        expr: |
+          rate(alebus_ingestor_gps_enrichment_total{status="invalid"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "High rate of invalid GPS payloads"
+          description: |
+            Many GPS messages are failing validation. Current rate: {{ $value | printf "%.3f" }}/sec
+            
+            Possible causes:
+            - Bus device firmware issues
+            - JSON serialization problems
+            - Missing required fields
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_invalid_payload"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # GPS Retry Exhaustion
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSEnrichmentRetryExhausted
+        expr: |
+          rate(alebus_ingestor_gps_retry_exhausted_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          component: gps_enrichment
+        annotations:
+          summary: "GPS messages exhausting retry budget"
+          description: |
+            GPS messages are failing after max retries, indicating persistent
+            infrastructure issues. Rate: {{ $value | printf "%.4f" }}/sec
+            
+            This is a critical issue - GPS data is being lost.
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_retry_exhausted"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Low Resolver Confidence
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSResolverLowConfidence
+        expr: |
+          histogram_quantile(0.5, rate(alebus_ingestor_gps_resolver_confidence_bucket[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "GPS resolver showing low confidence scores"
+          description: |
+            Median resolver confidence is below 50%. This could indicate:
+            - GPS accuracy issues
+            - Route geometry quality problems
+            - Many buses in BOOTSTRAP or REACQUIRE mode
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_low_confidence"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # GPS Enrichment Latency
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSEnrichmentHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(alebus_ingestor_gps_enrichment_latency_ms_bucket[5m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "GPS enrichment latency is high"
+          description: |
+            P95 GPS enrichment latency exceeds 100ms. Current P95: {{ $value | printf "%.1f" }}ms
+            
+            This could indicate:
+            - Redis slowdown
+            - High resolver computation time
+            - Resource contention
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_high_latency"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # GPS Enrichment Success Rate
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSEnrichmentLowSuccessRate
+        expr: |
+          (
+            rate(alebus_ingestor_gps_enrichment_total{status="success"}[5m])
+            /
+            sum(rate(alebus_ingestor_gps_enrichment_total[5m]))
+          ) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "GPS enrichment success rate below 80%"
+          description: |
+            Less than 80% of GPS messages are being successfully enriched.
+            Current success rate: {{ $value | printf "%.1f" }}%
+            
+            Review other alerts for specific failure causes.
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_low_success_rate"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Assignment Cache Performance
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSAssignmentCacheLowHitRate
+        expr: |
+          (
+            rate(alebus_ingestor_gps_assignment_cache_hit_total[5m])
+            /
+            (rate(alebus_ingestor_gps_assignment_cache_hit_total[5m]) + rate(alebus_ingestor_gps_assignment_cache_miss_total[5m]))
+          ) < 0.9
+        for: 10m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "Assignment cache hit rate below 90%"
+          description: |
+            Assignment cache is not being utilized effectively.
+            Current hit rate: {{ $value | printf "%.1f" }}%
+            
+            This increases Postgres load and enrichment latency.
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_cache_miss"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Geometry Cache Performance
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSGeometryCacheLowHitRate
+        expr: |
+          (
+            rate(alebus_ingestor_gps_geometry_cache_hit_total[5m])
+            /
+            (rate(alebus_ingestor_gps_geometry_cache_hit_total[5m]) + rate(alebus_ingestor_gps_geometry_cache_miss_total[5m]))
+          ) < 0.95
+        for: 10m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "Geometry cache hit rate below 95%"
+          description: |
+            Route geometry cache is not being utilized effectively.
+            Current hit rate: {{ $value | printf "%.1f" }}%
+            
+            This increases Postgres load for route geometry lookups.
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_cache_miss"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Phase 8: Staged Rollout Monitoring
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: gps_enrichment_rollout_alerts
+    rules:
+      # ─────────────────────────────────────────────────────────────────────────
+      # Staged Rollout Traffic Monitoring
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSRolloutFilteredHighRate
+        expr: |
+          rate(alebus_ingestor_gps_enrichment_total{status="staged_rollout_filtered"}[5m]) > 
+          (rate(alebus_ingestor_gps_enrichment_total{status="success"}[5m]) * 10)
+        for: 5m
+        labels:
+          severity: info
+          component: gps_enrichment
+        annotations:
+          summary: "Many buses filtered by staged rollout rules"
+          description: |
+            More than 10x buses are being filtered by staged rollout compared to 
+            successful enrichments. This is expected during gradual rollout.
+            
+            Consider expanding rollout percentage if stable.
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_staged_rollout"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Rollout Stage Validation
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSRolloutNoTraffic
+        expr: |
+          (
+            sum(rate(alebus_ingestor_gps_enrichment_total{status="success"}[5m])) == 0
+            and
+            sum(rate(alebus_ingestor_gps_enrichment_total{status="staged_rollout_filtered"}[5m])) > 0
+          )
+        for: 10m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "GPS enrichment enabled but no buses matching rollout rules"
+          description: |
+            GPS enrichment is enabled with staged rollout, but no buses are 
+            matching the rollout criteria (prefix or percentage).
+            
+            Check:
+            - GPS_ALLOWED_BUS_PREFIXES matches actual bus IDs
+            - GPS_ROLLOUT_PERCENTAGE is non-zero
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_rollout_config"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Rollout Error Rate per Stage
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSRolloutHighErrorRate
+        expr: |
+          (
+            sum(rate(alebus_ingestor_gps_enrichment_total{status=~"infra_error|no_assignment|route_not_found"}[5m]))
+            /
+            sum(rate(alebus_ingestor_gps_enrichment_total{status!="staged_rollout_filtered"}[5m]))
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          component: gps_enrichment
+        annotations:
+          summary: "GPS enrichment error rate exceeds 5% during rollout"
+          description: |
+            Error rate for enrolled buses exceeds rollout threshold.
+            Current error rate: {{ $value | printf "%.1f" }}%
+            
+            CONSIDER ROLLBACK:
+            1. Set ENABLE_GPS_ENRICHMENT=false
+            2. Rolling restart ingestor pods
+            3. Investigate root cause
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_rollout_error"
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Rollout Confidence Threshold
+      # ─────────────────────────────────────────────────────────────────────────
+      - alert: GPSRolloutLowConfidenceRate
+        expr: |
+          (
+            histogram_quantile(0.2, rate(alebus_ingestor_gps_resolver_confidence_bucket[5m])) < 0.3
+          )
+        for: 15m
+        labels:
+          severity: warning
+          component: gps_enrichment
+        annotations:
+          summary: "20% of GPS enrichments have confidence below 30%"
+          description: |
+            Too many buses showing low resolver confidence during rollout.
+            This could indicate data quality issues with route geometry.
+            
+            Consider reducing rollout percentage while investigating.
+          runbook_url: "https://wiki.alebus.io/runbooks/gps_rollout_confidence"
