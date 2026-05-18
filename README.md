@@ -8,10 +8,14 @@ GPS telemetry from bus-mounted devices flows through an MQTT pipeline into an ev
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
 ![MQTT](https://img.shields.io/badge/MQTT-660066?style=flat&logo=mqtt&logoColor=white)
+![EMQX](https://img.shields.io/badge/EMQX-39F0D8?style=flat&logo=emqx&logoColor=black)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
 ![React Native](https://img.shields.io/badge/React_Native-20232A?style=flat&logo=react&logoColor=61DAFB)
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=next.js&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=flat&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-F2CC0C?style=flat&logo=grafana&logoColor=white)
 
-> **License:** Source-available for portfolio and educational reference only. Commercial use prohibited. See [LICENSE](./LICENSE).
+> **License:** Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0). Attribution to Mathews Mwangi required. Commercial use prohibited. See [LICENSE](./LICENSE).
 
 > **📌 About this repository — public showcase build.** This README documents the **full production system** as designed, built, and deployed. The runnable binaries (`cmd/api`, `cmd/emqx_ingestor`, `cmd/emqx_auth`, `cmd/journey_worker`, `cmd/gps_simulator`) and the proprietary algorithm packages (GPS-to-route resolver, recommendation ranking, atomic Redis Lua write semantics, journey lifecycle automation) are **intentionally omitted from this public copy** to protect the working implementation. What ships here is the architectural skeleton — domain model, application boundaries, HTTP middleware, MQTT plumbing, Redis client infrastructure, migrations, observability configuration, and OpenAPI contract. Each omitted package directory carries a `NOTICE.md` describing what would be there in the private build.
 
