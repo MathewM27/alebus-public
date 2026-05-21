@@ -40,11 +40,15 @@ GPS telemetry from bus-mounted devices flows through an MQTT pipeline into an ev
 
 ---
 
+## Motivation
+
+Mauritius has no public real-time bus tracking. Commuters wait at stops with no visibility of when — or whether — a bus is coming; waits regularly exceed 45 minutes with no way to tell if the next bus is 2 minutes or 45 minutes away. Operators have no live view of their fleet — no live map, no route adherence, no delay detection.
+
+Alebus was built to solve both sides of that problem: give commuters a live, direction-aware view of the buses approaching their stop, and give operators a real-time picture of their fleet as it moves. See [Background](#background) for the full project history.
+
+---
+
 ## What It Does
-
-Mauritius has no public real-time bus tracking. Commuters wait at stops with no visibility of when — or whether — a bus is coming. Operators have no live view of their fleet.
-
-Alebus solves both sides of that problem.
 
 **For commuters:** Open the app, enter where you are and where you're going. The system finds buses on matching routes that are heading toward your destination and haven't yet passed your boarding stop — accounting for direction, route assignment, and real-time position. A live map shows the bus moving toward you with ETAs that update every few seconds.
 
@@ -324,15 +328,16 @@ Structured logging throughout the codebase (JSON format in production) means log
 
 ---
 
-## Development Setup
+## Quick Start
 
-> The public copy of this repository contains the architectural skeleton — domain model, application contracts, HTTP middleware, MQTT plumbing, Redis client infrastructure, and PostgreSQL migrations — but **not the runnable `cmd/*` binaries**. The setup below describes how the full system runs in the private repository.
+> The public copy of this repository contains the architectural skeleton — domain model, application contracts, HTTP middleware, MQTT plumbing, Redis client infrastructure, and PostgreSQL migrations — but **not the runnable `cmd/*` binaries**. The steps below describe how the full system runs in the private repository.
 
 ### Prerequisites
 
 - Go 1.22+
-- Docker and Docker Compose
+- Docker and Docker Compose v2+
 - Make (optional, for convenience commands)
+- [`golang-migrate`](https://github.com/golang-migrate/migrate) CLI (for database migrations)
 
 ### Start local infrastructure
 
@@ -341,6 +346,7 @@ Structured logging throughout the codebase (JSON format in production) means log
 docker compose -f compose/dev.yml up -d
 
 # Run migrations
+export DATABASE_URL="postgres://alebus:alebus@localhost:5432/alebus?sslmode=disable"
 make migrate-up
 ```
 
@@ -364,6 +370,45 @@ go run cmd/gps_simulator/main.go --buses=5 --routes=2
 
 ---
 
+## Usage
+
+The running system is exercised through three surfaces — a REST API, real-time WebSocket streams, and the client apps. The OpenAPI contract and TypeScript client referenced below ship in this public copy and are usable as-is; the live API surface requires the full build (see [Quick Start](#quick-start)).
+
+### REST API
+
+The HTTP API is defined by an OpenAPI 3 contract at [`api/openapi.yaml`](api/openapi.yaml) — the single source of truth for every endpoint, request, and response shape. Lint it locally with:
+
+```bash
+make api-openapi-lint
+```
+
+A generated TypeScript client lives in [`api/clients/ts`](api/clients/ts):
+
+```bash
+make api-client-ts-install
+make api-client-ts-build
+```
+
+### Real-time WebSocket streams
+
+Live bus positions and journey updates are pushed over WebSocket — clients never poll. The API exposes:
+
+| Endpoint | Purpose |
+|---|---|
+| `/api/v1/ws/mux` | Multiplexed stream (recommended) — many topics over one connection |
+| `/api/v1/ws/live-buses` | Live bus positions |
+| `/api/v1/ws/journeys` | Journey-specific updates |
+
+### Simulated fleet
+
+Real Mauritius route data is not bundled here, so the GPS simulator (`cmd/gps_simulator`) is how the system is driven in development. It generates realistic GPS payloads for buses moving along routes and publishes them through the same MQTT → ingestor → Redis → WebSocket path as real devices — load sample routes, create buses, start a simulation, and watch updates fan out to connected clients.
+
+### Client applications
+
+The commuter app and operator dashboard are the primary end-user interfaces — see [Related Repositories](#related-repositories).
+
+---
+
 ## Related Repositories
 
 | Repository | Description |
@@ -380,6 +425,19 @@ Alebus was built out of direct frustration with Mauritius's public transport sys
 The platform was designed, built, and deployed to production by a single engineer across 2025–2026. It was validated through a month of real-world road testing on live Mauritius bus routes, and commercial pilot discussions were pursued with the country's largest bus operator and the national Ministry of Transport.
 
 The project was wound down following an unsuccessful public tender. The codebase represents a complete, production-validated implementation — not a prototype or proof of concept.
+
+---
+
+## Contributing
+
+Alebus is a public **showcase build** of a project that has been wound down (see [Background](#background)) — it is not under active development, and the runnable core is intentionally omitted from this repository. External pull requests are therefore not being accepted.
+
+Questions, corrections, and discussion are welcome:
+
+- **Spotted an error** in the documentation or architecture write-up? Open an issue.
+- **Curious about the design**, the omitted internals, or the engineering trade-offs? Reach out via [mathewsmwangi.com](https://mathewsmwangi.com) or [LinkedIn](https://linkedin.com/in/mathews-mwangi-972839219).
+
+All use of this code is governed by the [CC BY-NC 4.0 license](./LICENSE): attribution to Mathews Mwangi is required, and commercial use is prohibited.
 
 ---
 
